@@ -1,0 +1,102 @@
+from PIL import Image
+import numpy as np
+from google.colab import files
+
+# --- Upload Image Helper ---
+def upload_image():
+    uploaded = files.upload()
+    image_path = list(uploaded.keys())[0]
+    print(f"✅ Uploaded: {image_path}")
+    return image_path
+
+# --- Function 1: Encode (Hide Message) ---
+def encode_image(image_path, message, output_path):
+    img = Image.open(image_path)
+    np_img = np.array(img)
+
+    binary_message = ''.join(format(ord(c), '08b') for c in message)
+    binary_message += '1111111111111110'  # end delimiter
+
+    data = np_img.flatten()
+    if len(binary_message) > len(data):
+        raise ValueError("Message too long for this image!")
+
+    for i in range(len(binary_message)):
+        data[i] = (data[i] & ~1) | int(binary_message[i])
+
+    encoded_img = data.reshape(np_img.shape)
+    Image.fromarray(encoded_img.astype(np.uint8)).save(output_path)
+    print(f"✅ Message hidden successfully in {output_path}")
+
+# --- Function 2: Decode (Extract Message) ---
+def decode_image(image_path):
+    img = Image.open(image_path)
+    np_img = np.array(img)
+
+    data = np_img.flatten()
+    bits = [str(data[i] & 1) for i in range(len(data))]
+    all_bits = ''.join(bits)
+
+    chars = [all_bits[i:i+8] for i in range(0, len(all_bits), 8)]
+    message = ''
+    for idx, c in enumerate(chars):
+        if c == '11111111' and idx + 1 < len(chars) and chars[idx + 1] == '11111110':
+            break
+        message += chr(int(c, 2))
+    print("\n🔍 Hidden Message:\n", message)
+
+# --- Simple XOR (Optional Encryption) ---
+def xor_encrypt_decrypt(message, key):
+    return ''.join(chr(ord(c) ^ ord(key[i % len(key)])) for i, c in enumerate(message))
+
+# --- Main Interactive Menu ---
+print("🔹 Choose an option:")
+print("1️⃣ Hide a secret message inside an image")
+print("2️⃣ Extract hidden message from an image")
+
+choice = input("Enter choice (1/2): ")
+
+if choice == "1":
+    print("\n📤 Upload the image to hide message in:")
+    image_path = upload_image()
+
+    message = input("Enter your secret message: ")
+
+    encrypt_choice = input("Add password encryption? (y/n): ").lower()
+    if encrypt_choice == "y":
+        key = input("Enter password: ")
+        message = xor_encrypt_decrypt(message, key)
+
+    output_path = "encoded_image.png"
+    encode_image(image_path, message, output_path)
+
+    print("\n📥 Download your encoded image below:")
+    files.download(output_path)
+
+elif choice == "2":
+    print("\n📤 Upload the encoded image:")
+    image_path = upload_image()
+
+    print("\n⏳ Extracting message...")
+    img = Image.open(image_path)
+    np_img = np.array(img)
+    data = np_img.flatten()
+    bits = [str(data[i] & 1) for i in range(len(data))]
+    all_bits = ''.join(bits)
+
+    chars = [all_bits[i:i+8] for i in range(0, len(all_bits), 8)]
+    message = ''
+    for idx, c in enumerate(chars):
+        if c == '11111111' and idx + 1 < len(chars) and chars[idx + 1] == '11111110':
+            break
+        message += chr(int(c, 2))
+
+    decrypt_choice = input("Was this message password protected? (y/n): ").lower()
+    if decrypt_choice == "y":
+        key = input("Enter password: ")
+        message = xor_encrypt_decrypt(message, key)
+
+    print("\n🔍 Hidden Message:\n", message)
+
+else:
+    print("❌ Invalid choice. Please restart the cell.")
